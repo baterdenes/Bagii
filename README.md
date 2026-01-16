@@ -1,1 +1,294 @@
-# Bagii
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026 Зуны Нислэгийн Хуваарь - Map</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: 'Inter', sans-serif; }
+        #map { height: calc(100vh - 60px); width: 100%; background: #0f172a; }
+        
+        /* Pop-up загвар */
+        .leaflet-popup-content-wrapper {
+            border-radius: 12px;
+            padding: 0;
+            overflow: hidden;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+        }
+        .leaflet-popup-content { margin: 0; width: 300px !important; }
+        .leaflet-container a.leaflet-popup-close-button {
+            color: white;
+            font-size: 20px;
+            padding: 8px;
+            z-index: 10;
+        }
+
+        .flight-header { 
+            padding: 16px; 
+            color: white; 
+            font-weight: 800; 
+            font-size: 1.1rem; 
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .flight-list { 
+            max-height: 220px; 
+            overflow-y: auto; 
+            background: white; 
+        }
+        /* Custom Scrollbar */
+        .flight-list::-webkit-scrollbar { width: 6px; }
+        .flight-list::-webkit-scrollbar-track { background: #f1f5f9; }
+        .flight-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+        .flight-item { 
+            padding: 12px 16px; 
+            border-bottom: 1px solid #e2e8f0; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            transition: background 0.2s;
+        }
+        .flight-item:hover { background: #f8fafc; }
+        .flight-item:last-child { border: none; }
+    </style>
+</head>
+<body class="bg-slate-900">
+
+    <header class="h-[60px] flex items-center px-6 justify-between bg-slate-900 border-b border-slate-800 shadow-lg z-50 relative">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center text-slate-900 font-black">✈</div>
+            <div>
+                <h1 class="text-lg font-bold text-white leading-tight">2026 ОНЫ ЗУН НИСЛЭГИЙН ХУВААРЬ</h1>
+                <p class="text-slate-400 text-[10px] font-bold tracking-widest uppercase">ИРГЭНИЙ НИСЭХИЙН ЕРӨНХИЙ ГАЗАР</p>
+            </div>
+        </div>
+        <div class="text-right hidden sm:block">
+            <span class="text-emerald-400 text-xs font-mono bg-emerald-400/10 px-2 py-1 rounded">LIVE MAP DATA</span>
+        </div>
+    </header>
+
+    <div id="map"></div>
+
+    <div class="absolute bottom-6 left-6 z-[1000] bg-slate-800/90 backdrop-blur-sm p-4 rounded-xl border border-slate-700 shadow-xl">
+        <div class="text-[10px] font-bold text-slate-400 uppercase mb-2">Бүс нутаг</div>
+        <div class="space-y-2 text-xs font-medium text-white">
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#10b981]"></span> Европ</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#3b82f6]"></span> Солонгос</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#ef4444]"></span> Япон</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#8b5cf6]"></span> Хятад (Бүс нутаг)</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#ec4899]"></span> Аялал / Зүүн өмнөд</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#f97316]"></span> ОХУ / Төв Ази</div>
+        </div>
+    </div>
+
+    <script>
+        // Ulaanbaatar Coordinates
+        const ubn = [47.897, 106.761]; // New Airport location approx
+
+        // Colors
+        const C_KR = "#3b82f6"; // Blue
+        const C_JP = "#ef4444"; // Red
+        const C_EU = "#10b981"; // Green
+        const C_CN = "#8b5cf6"; // Purple
+        const C_VAC = "#ec4899"; // Pink
+        const C_RU = "#f97316"; // Orange
+
+        const cityData = {
+            // --- EUROPE ---
+            "FRANKFURT": {
+                name: "Франкфурт", code: "FRA", color: C_EU, coords: [50.03, 8.56],
+                flights: [{ air: "MIAT", n: "MGL137", t: "10:10", d: "Өдөр бүр" }]
+            },
+            "ISTANBUL": {
+                name: "Истанбул", code: "IST", color: C_EU, coords: [41.27, 28.75],
+                flights: [
+                    { air: "MIAT", n: "MGL161", t: "07:55", d: "Ба, Ням" },
+                    { air: "Turkish", n: "THY237", t: "09:10", d: "Мя, Пү, Ба, Ням" }
+                ]
+            },
+
+            // --- KOREA ---
+            "SEOUL": {
+                name: "Сөүл (Инчеон)", code: "ICN", color: C_KR, coords: [37.46, 126.44],
+                flights: [
+                    { air: "MIAT", n: "MGL301/307", t: "08:40 / 18:15", d: "Өдөр бүр" },
+                    { air: "Korean Air", n: "KAL2042", t: "13:00 / 16:10", d: "Өдөр бүр" },
+                    { air: "Asiana", n: "AAR568", t: "00:25 / 03:45", d: "Өдөр бүр" },
+                    { air: "Jeju Air", n: "JJA5204", t: "13:20", d: "Да, Лх, Ба, Ня" },
+                    { air: "Aero Mon", n: "MNG601", t: "11:00", d: "Да, Лх, Ба" },
+                    { air: "T'way", n: "TWB422", t: "16:00", d: "Да, Лх, Ба, Ня" }
+                ]
+            },
+            "BUSAN": {
+                name: "Бусан", code: "PUS", color: C_KR, coords: [35.17, 129.07],
+                flights: [
+                    { air: "Air Busan", n: "ABL412", t: "16:30", d: "Мя, Ба" },
+                    { air: "Jeju Air", n: "JJA5258", t: "01:40", d: "Мя, Пү, Бя, Ня" },
+                    { air: "Jin Air", n: "JNA782", t: "01:30", d: "Мя, Ба" }
+                ]
+            },
+            "DAEGU": {
+                name: "Дэгү", code: "TAE", color: C_KR, coords: [35.87, 128.60],
+                flights: [{ air: "T'way", n: "TWB424", t: "00:50", d: "Пү, Ня" }]
+            },
+            "CHEONGJU": {
+                name: "Чонжу", code: "CJJ", color: C_KR, coords: [36.64, 127.48],
+                flights: [
+                    { air: "Aero K", n: "EOK422", t: "02:05", d: "Лх, Бя" },
+                    { air: "T'way", n: "TWB426", t: "00:20", d: "Лх, Бя" }
+                ]
+            },
+
+            // --- JAPAN ---
+            "TOKYO": {
+                name: "Токио (Нарита)", code: "NRT", color: C_JP, coords: [35.77, 140.39],
+                flights: [
+                    { air: "MIAT", n: "MGL501", t: "07:45", d: "Өдөр бүр" },
+                    { air: "Aero Mon", n: "MNG901", t: "08:00", d: "Мя, Ба, Ня" },
+                    { air: "United", n: "UAL8", t: "09:55", d: "Пү, Ня" }
+                ]
+            },
+            "OSAKA": {
+                name: "Осака", code: "KIX", color: C_JP, coords: [34.43, 135.23],
+                flights: [{ air: "MIAT", n: "MGL505", t: "13:00", d: "Лх, Бя" }]
+            },
+
+            // --- CHINA (MAINLAND) ---
+            "BEIJING_CAP": {
+                name: "Бээжин (Capital)", code: "PEK", color: C_CN, coords: [40.07, 116.60],
+                flights: [
+                    { air: "MIAT", n: "MGL223", t: "06:15", d: "Өдөр бүр" },
+                    { air: "Air China", n: "CCA724", t: "18:30", d: "Өдөр бүр" },
+                    { air: "Air China", n: "CCA956", t: "16:30", d: "Өдөр бүр" }
+                ]
+            },
+            "BEIJING_DAX": {
+                name: "Бээжин (Daxing)", code: "PKX", color: C_CN, coords: [39.50, 116.41],
+                flights: [{ air: "Hunnu Air", n: "MML801", t: "18:55", d: "Да, Лх, Ба" }]
+            },
+            "HOHHOT": {
+                name: "Хөххот", code: "HET", color: C_CN, coords: [40.84, 111.75],
+                flights: [
+                    { air: "MIAT", n: "MGL257", t: "17:00", d: "Мя, Пү, Бя" },
+                    { air: "Aero Mon", n: "MNG801", t: "14:00", d: "Да, Лх, Ба" },
+                    { air: "Air China", n: "CCA758", t: "13:00", d: "Өдөр бүр" }
+                ]
+            },
+            "ERENHOT": {
+                name: "Эрээн", code: "ERL", color: C_CN, coords: [43.65, 111.97],
+                flights: [
+                    { air: "MIAT", n: "MGL241", t: "17:00", d: "Өдөр бүр" },
+                    { air: "Hunnu Air", n: "MML861", t: "08:45", d: "Мя, Пү, Бя" }
+                ]
+            },
+            "SHANGHAI": {
+                name: "Шанхай", code: "PVG", color: C_CN, coords: [31.14, 121.80],
+                flights: [{ air: "MIAT", n: "MGL265", t: "20:30", d: "Лх, Ня" }]
+            },
+
+            // --- VACATION / SE ASIA ---
+            "HONGKONG": {
+                name: "Хонг Конг", code: "HKG", color: C_VAC, coords: [22.30, 113.91],
+                flights: [{ air: "MIAT", n: "MGL297", t: "06:20", d: "Өдөр бүр" }]
+            },
+            "SANYA": {
+                name: "Санья", code: "SYX", color: C_VAC, coords: [18.25, 109.51],
+                flights: [
+                    { air: "Hunnu Air", n: "MML815", t: "22:10", d: "Пү, Ня" },
+                    { air: "Juneyao", n: "DKH1528", t: "02:30", d: "Лх, Бя, Ня" }
+                ]
+            },
+            "HAIKOU": {
+                name: "Хайкоу", code: "HAK", color: C_VAC, coords: [20.01, 110.33],
+                flights: [{ air: "Hunnu Air", n: "MML811", t: "03:10", d: "Пүрэв" }]
+            },
+
+            // --- RUSSIA / CENTRAL ASIA ---
+            "IRKUTSK": {
+                name: "Эрхүү", code: "IKT", color: C_RU, coords: [52.26, 104.38],
+                flights: [{ air: "IrAero", n: "IAE231", t: "19:20", d: "Мя, Лх, Ба, Бя, Ня" }]
+            },
+            "KRASNOYARSK": {
+                name: "Красноярск", code: "KJA", color: C_RU, coords: [56.17, 92.49],
+                flights: [{ air: "KrasAvia", n: "SSJ506", t: "05:40", d: "Лх, Ня" }]
+            },
+            "ALMATY": {
+                name: "Алмата", code: "ALA", color: C_RU, coords: [43.35, 77.04],
+                flights: [{ air: "Hunnu Air", n: "MML411", t: "11:40", d: "Мя, Бя" }]
+            }
+        };
+
+        // Initialize Map
+        const map = L.map('map', { 
+            zoomControl: false,
+            center: [38, 110],
+            zoom: 4,
+            minZoom: 3
+        });
+        
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+        // Dark Theme Map Tiles
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+        }).addTo(map);
+
+        // Ulaanbaatar Hub Marker
+        const hubIcon = L.divIcon({
+            className: 'custom-div-icon',
+            html: `<div style="background:#facc15; width:12px; height:12px; border-radius:50%; border:2px solid white; box-shadow: 0 0 10px #facc15;"></div>`,
+            iconSize: [12, 12],
+            iconAnchor: [6, 6]
+        });
+        L.marker(ubn, {icon: hubIcon}).addTo(map).bindTooltip("УЛААНБААТАР", {permanent:true, direction:'top', className: 'bg-transparent border-0 text-yellow-400 font-black shadow-none text-xs'});
+
+        // Generate Map Elements
+        Object.keys(cityData).forEach(key => {
+            const city = cityData[key];
+            
+            // 1. Draw Curved Lines (Geodesic visual fake)
+            const pathOptions = { color: city.color, weight: 1.5, opacity: 0.4, dashArray: '4, 8' };
+            L.polyline([ubn, city.coords], pathOptions).addTo(map);
+
+            // 2. City Marker
+            const marker = L.circleMarker(city.coords, {
+                radius: 6,
+                color: 'white',
+                weight: 1.5,
+                fillColor: city.color,
+                fillOpacity: 1
+            }).addTo(map);
+
+            // 3. Popup Content
+            let html = `
+                <div class="flight-header" style="background: ${city.color}">
+                    <div class="flex justify-between items-center">
+                        <span>${city.name}</span>
+                        <span class="text-xs bg-white/20 px-2 py-1 rounded">${city.code}</span>
+                    </div>
+                </div>
+                <div class="flight-list">`;
+            
+            city.flights.forEach(f => {
+                html += `
+                    <div class="flight-item">
+                        <div>
+                            <div class="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">${f.air}</div>
+                            <div class="text-sm font-bold text-slate-800">${f.t}</div>
+                            <div class="text-[10px] text-slate-500 mt-1">${f.d}</div>
+                        </div>
+                        <div class="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100">${f.n}</div>
+                    </div>`;
+            });
+            html += `</div>`;
+
+            marker.bindPopup(html);
+        });
+
+    </script>
+</body>
+</html>
